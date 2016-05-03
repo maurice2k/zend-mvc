@@ -77,6 +77,9 @@ class DispatchListener extends AbstractListenerAggregate
         } catch (InvalidControllerException $exception) {
             $return = $this->marshalControllerNotFoundEvent($application::ERROR_CONTROLLER_INVALID, $controllerName, $e, $application, $exception);
             return $this->complete($return, $e);
+        } catch (\Throwable $exception) {
+            $return = $this->marshalBadControllerEvent($controllerName, $e, $application, $exception);
+            return $this->complete($return, $e);
         } catch (\Exception $exception) {
             $return = $this->marshalBadControllerEvent($controllerName, $e, $application, $exception);
             return $this->complete($return, $e);
@@ -89,9 +92,17 @@ class DispatchListener extends AbstractListenerAggregate
             $controller->setEvent($e);
         }
 
+        $caughtException = null;
+
         try {
             $return = $controller->dispatch($request, $response);
+        } catch (\Throwable $ex) {
+            $caughtException = $ex;
         } catch (\Exception $ex) {
+            $caughtException = $ex;
+        }
+
+        if ($caughtException !== null) {
             $e->setError($application::ERROR_EXCEPTION)
                   ->setController($controllerName)
                   ->setControllerClass(get_class($controller))
@@ -113,7 +124,7 @@ class DispatchListener extends AbstractListenerAggregate
     {
         $error     = $e->getError();
         $exception = $e->getParam('exception');
-        if ($exception instanceof \Exception) {
+        if ($exception instanceof \Exception || $exception instanceof \Throwable) {
             zend_monitor_custom_event_ex($error, $exception->getMessage(), 'Zend Framework Exception', ['code' => $exception->getCode(), 'trace' => $exception->getTraceAsString()]);
         }
     }
